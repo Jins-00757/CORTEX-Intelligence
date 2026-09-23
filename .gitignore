@@ -1,0 +1,34 @@
+# Salesforce SFDX
+.sfdx/
+.sf/
+*.zip
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Credentials & secrets
+.env
+.env.local
+*.key
+server.key
+SALESFORCE_JWT_KEY
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build
+dist/
+build/

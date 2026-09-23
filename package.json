@@ -1,0 +1,40 @@
+{
+  "name": "cortex-intelligence",
+  "version": "1.0.0",
+  "description": "Enterprise Salesforce customer intelligence platform with real-time predictive analytics",
+  "author": "Jinal",
+  "license": "Proprietary",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "sf org open --browser",
+    "test": "jest --coverage --passWithNoTests",
+    "test:apex": "sf apex run test --code-coverage --wait 20",
+    "lint": "eslint force-app --ext .js,.html",
+    "format": "prettier --write 'force-app/**/*.{js,html,css}'",
+    "validate": "npm run lint",
+    "deploy": "sf project deploy start --target-org dev-org",
+    "deploy:test": "sf project deploy start --target-org dev-org --test-level RunAllLocalTests",
+    "retrieve": "sf project retrieve start --target-org dev-org",
+    "scan": "sf scanner run --format json --severity-threshold high",
+    "setup": "bash scripts/setup-dev.sh"
+  },
+  "devDependencies": {
+    "@salesforce/cli": "^2.24.0",
+    "@salesforce/eslint-config-lwc": "^3.7.2",
+    "@lwc/eslint-plugin-lwc": "^2.0.0",
+    "@salesforce/eslint-plugin-lightning": "^1.0.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-jest": "~28.4.0",
+    "eslint": "^8.52.0",
+    "jest": "^29.7.0",
+    "babel-jest": "^29.7.0",
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "prettier": "^3.1.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0"
+  }
+}

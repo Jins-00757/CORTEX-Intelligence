@@ -1,0 +1,18 @@
+{
+  "sfdxMetadataApiVersion": "61.0",
+  "name": "cortex-intelligence",
+  "namespace": "",
+  "sourceApiVersion": "61.0",
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "Cortex Intelligence",
+      "versionNumber": "1.0.0.NEXT",
+      "dependencies": []
+    }
+  ],
+  "plugins": {
+    "@salesforce/sfdx-scanner": {}
+  }
+}

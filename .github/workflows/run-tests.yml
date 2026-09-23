@@ -1,0 +1,37 @@
+name: Run Apex Tests
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SFDX CLI
+        run: npm install -g @salesforce/cli
+
+      - name: Authenticate with Salesforce
+        env:
+          SALESFORCE_JWT_KEY: ${{ secrets.SALESFORCE_JWT_KEY }}
+          SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
+          SALESFORCE_USERNAME: ${{ secrets.SALESFORCE_DEV_USERNAME }}
+        run: |
+          echo "$SALESFORCE_JWT_KEY" > server.key
+          sf org login jwt \
+            --client-id $SALESFORCE_CLIENT_ID \
+            --jwt-key-file server.key \
+            --username $SALESFORCE_USERNAME \
+            --alias devOrg
+
+      - name: Run Apex Tests
+        run: sf apex run test --coverage --wait 20 --result-format json
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/apex-coverage.json
