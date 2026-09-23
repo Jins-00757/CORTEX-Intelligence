@@ -32,3 +32,8 @@ coverage/
 # Build
 dist/
 build/
+
+# Local scratch / one-off setup artifacts (not project deliverables)
+CORTEX_SETUP_REMAINING.bat
+CORTEX_SETUP_REMAINING.ps1
+DAY_1_COMPLETION_SUMMARY.md
