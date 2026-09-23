@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Lifetime_Value_Non_Negative</fullName>
+    <active>true</active>
+    <errorConditionFormula>AND(NOT(ISNULL(LifetimeValue__c)), LifetimeValue__c &lt; 0)</errorConditionFormula>
+    <errorDisplayField>LifetimeValue__c</errorDisplayField>
+    <errorMessage>Lifetime Value cannot be negative.</errorMessage>
+</ValidationRule>

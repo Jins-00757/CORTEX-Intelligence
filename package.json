@@ -15,9 +15,9 @@
     "lint": "eslint force-app --ext .js,.html",
     "format": "prettier --write 'force-app/**/*.{js,html,css}'",
     "validate": "npm run lint",
-    "deploy": "sf project deploy start --target-org dev-org",
-    "deploy:test": "sf project deploy start --target-org dev-org --test-level RunAllLocalTests",
-    "retrieve": "sf project retrieve start --target-org dev-org",
+    "deploy": "sf project deploy start --target-org cortex-dev",
+    "deploy:test": "sf project deploy start --target-org cortex-dev --test-level RunAllLocalTests",
+    "retrieve": "sf project retrieve start --target-org cortex-dev",
     "scan": "sf scanner run --format json --severity-threshold high",
     "setup": "bash scripts/setup-dev.sh"
   },

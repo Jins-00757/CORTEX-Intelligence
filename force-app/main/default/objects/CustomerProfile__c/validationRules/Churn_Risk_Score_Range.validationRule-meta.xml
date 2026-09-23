@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Churn_Risk_Score_Range</fullName>
+    <active>true</active>
+    <errorConditionFormula>AND(NOT(ISNULL(ChurnRiskScore__c)), OR(ChurnRiskScore__c &lt; 0, ChurnRiskScore__c &gt; 1))</errorConditionFormula>
+    <errorDisplayField>ChurnRiskScore__c</errorDisplayField>
+    <errorMessage>Churn Risk Score must be between 0 and 1.</errorMessage>
+</ValidationRule>
