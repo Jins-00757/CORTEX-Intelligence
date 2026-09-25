@@ -3,6 +3,7 @@
  */
 public with sharing class CortexConfigService {
 
+    @TestVisible
     private static CortexConfig__mdt cachedConfig;
 
     public static CortexConfig__mdt getConfig() {

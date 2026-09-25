@@ -193,4 +193,44 @@ private class ChurnPredictionServiceTest {
         }
         Test.stopTest();
     }
+
+    @IsTest
+    static void testPredictBulkScoresEachCustomerFromOneEventFetch() {
+        CortexTestUtils.insertProfiles(new List<String>{ 'BULK-AT-RISK', 'BULK-HEALTHY' });
+        CortexTestUtils.stubEvents(CortexTestUtils.healthyHistory('BULK-HEALTHY'));
+
+        Test.startTest();
+        List<ChurnPredictionService.ChurnPredictionResult> results = ChurnPredictionService.predictBulk(
+            new Set<String>{ 'BULK-AT-RISK', 'BULK-HEALTHY', '', null }
+        );
+        Test.stopTest();
+
+        System.assertEquals(2, results.size(), 'Blank ids must be ignored');
+        Map<String, CustomerProfile__c> profiles = CortexTestUtils.profilesByExternalId();
+        System.assertEquals(0.85, profiles.get('BULK-AT-RISK').ChurnRiskScore__c);
+        System.assertEquals(0, profiles.get('BULK-HEALTHY').ChurnRiskScore__c);
+    }
+
+    @IsTest
+    static void testPredictBulkWithNoCustomersReturnsEmpty() {
+        System.assertEquals(0, ChurnPredictionService.predictBulk(null).size());
+        System.assertEquals(0, ChurnPredictionService.predictBulk(new Set<String>{ ' ' }).size());
+    }
+
+    @IsTest
+    static void testPublishAlertIfNeededPublishesAtThreshold() {
+        CortexTestUtils.useConfig(true, 0.7);
+        ChurnPredictionService.ChurnPredictionResult result = new ChurnPredictionService.ChurnPredictionResult();
+        result.customerId = 'TEST-Churn-Alert';
+        result.compositeRisk = 0.7;
+        result.riskBucket = '70-80%';
+        result.recommendation = 'Monitor closely and re-engage with targeted offers.';
+
+        Test.startTest();
+        ChurnPredictionService.publishAlertIfNeeded(result);
+        Integer publishes = Limits.getDmlStatements();
+        Test.stopTest();
+
+        System.assertEquals(1, publishes, 'A score equal to the threshold must raise an alert');
+    }
 }

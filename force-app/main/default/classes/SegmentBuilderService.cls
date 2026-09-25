@@ -36,14 +36,9 @@ public with sharing class SegmentBuilderService {
 
         // Big Object SOQL can only filter on indexed fields (CustomerId__c,
         // EventTimestamp__c), so the EventType__c == Purchase filter is
-        // applied here in Apex rather than in the WHERE clause.
+        // applied in classifyFromEvents rather than in the WHERE clause.
         DateTime windowStart = System.now().addDays(-LOOKBACK_DAYS);
-        List<CustomerDataEvents__b> events = [
-            SELECT CustomerId__c, EventType__c, EventTimestamp__c, Amount__c
-            FROM CustomerDataEvents__b
-            WHERE CustomerId__c IN :customerIds AND EventTimestamp__c >= :windowStart
-            LIMIT 50000
-        ];
+        List<CustomerDataEvents__b> events = CustomerEventSelector.selectSince(customerIds, windowStart);
 
         List<RfmScore> scores = classifyFromEvents(customerIds, events);
         updateProfiles(scores);
@@ -230,7 +225,7 @@ public with sharing class SegmentBuilderService {
         }
         Integer resultLimit = (maxResults == null || maxResults <= 0 || maxResults > 2000) ? 200 : maxResults;
 
-        String query = 'SELECT Id, Name, CustomerName__c, Email__c, CustomerSegment__c, ChurnRiskScore__c, LifetimeValue__c ' +
+        String query = 'SELECT Id, Name, ExternalCustomerId__c, CustomerName__c, Email__c, CustomerSegment__c, ChurnRiskScore__c, LifetimeValue__c ' +
             'FROM CustomerProfile__c WHERE ' + fieldName + ' ' + ALLOWED_OPERATORS.get(operatorSymbol) + ' :value ' +
             'LIMIT :resultLimit';
         return Database.query(query);

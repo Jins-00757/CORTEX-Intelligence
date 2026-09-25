@@ -23,8 +23,14 @@ public with sharing class BigObjectWriter {
         public String errorMessage;
     }
 
+    // Records "written" while running tests, so callers' tests can assert on
+    // exactly what would have been persisted.
+    @TestVisible
+    private static List<SObject> recordsWrittenInTest = new List<SObject>();
+
     public static List<WriteResult> insertImmediate(List<SObject> records) {
         if (Test.isRunningTest()) {
+            recordsWrittenInTest.addAll(records);
             List<WriteResult> syntheticResults = new List<WriteResult>();
             for (Integer i = 0; i < records.size(); i++) {
                 WriteResult synthetic = new WriteResult();

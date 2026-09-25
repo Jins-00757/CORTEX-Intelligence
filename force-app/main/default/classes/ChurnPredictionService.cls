@@ -41,20 +41,49 @@ public with sharing class ChurnPredictionService {
         if (String.isBlank(customerId)) {
             throw new CortexServiceException('CustomerId is required to compute a churn prediction.');
         }
+        return predictBulk(new Set<String>{ customerId })[0];
+    }
+
+    /**
+     * Bulk-safe variant used by the REST API, the CustomerDataEvent__e
+     * subscriber and the nightly batch. All reads happen before any DML:
+     * Big Object SOQL is executed as a callout, and a callout after
+     * uncommitted DML in the same transaction is rejected by the platform.
+     */
+    public static List<ChurnPredictionResult> predictBulk(Set<String> customerIds) {
+        Set<String> scopedIds = new Set<String>();
+        if (customerIds != null) {
+            for (String customerId : customerIds) {
+                if (String.isNotBlank(customerId)) {
+                    scopedIds.add(customerId);
+                }
+            }
+        }
+        if (scopedIds.isEmpty()) {
+            return new List<ChurnPredictionResult>();
+        }
 
         DateTime windowStart = System.now().addDays(-LOOKBACK_DAYS);
-        List<CustomerDataEvents__b> events = [
-            SELECT EventType__c, EventTimestamp__c, Amount__c
-            FROM CustomerDataEvents__b
-            WHERE CustomerId__c = :customerId AND EventTimestamp__c >= :windowStart
-            LIMIT 5000
-        ];
+        Map<String, List<CustomerDataEvents__b>> eventsByCustomer = new Map<String, List<CustomerDataEvents__b>>();
+        for (String customerId : scopedIds) {
+            eventsByCustomer.put(customerId, new List<CustomerDataEvents__b>());
+        }
+        for (CustomerDataEvents__b event : CustomerEventSelector.selectSince(scopedIds, windowStart)) {
+            List<CustomerDataEvents__b> bucket = eventsByCustomer.get(event.CustomerId__c);
+            if (bucket != null) {
+                bucket.add(event);
+            }
+        }
 
-        ChurnPredictionResult result = calculate(customerId, events);
-        persistSignal(result);
-        updateCustomerProfile(result);
-        publishAlertIfNeeded(result);
-        return result;
+        List<ChurnPredictionResult> results = new List<ChurnPredictionResult>();
+        for (String customerId : scopedIds) {
+            results.add(calculate(customerId, eventsByCustomer.get(customerId)));
+        }
+
+        persistSignals(results);
+        updateCustomerProfiles(results);
+        publishAlertsIfNeeded(results);
+        return results;
     }
 
     @TestVisible
@@ -161,46 +190,88 @@ public with sharing class ChurnPredictionService {
         return 'No action required.';
     }
 
-    private static void persistSignal(ChurnPredictionResult result) {
-        BigObjectWriter.insertImmediate(new ChurnSignals__b(
-            CustomerId__c = result.customerId,
-            SignalTimestamp__c = System.now(),
-            RecencyRiskScore__c = result.recencyRisk,
-            FrequencyRiskScore__c = result.frequencyRisk,
-            MonetaryRiskScore__c = result.monetaryRisk,
-            EngagementRiskScore__c = result.engagementRisk,
-            SupportRiskScore__c = result.supportRisk,
-            CompositeRiskScore__c = result.compositeRisk,
-            RiskBucket__c = result.riskBucket
-        ));
+    private static void persistSignals(List<ChurnPredictionResult> results) {
+        DateTime signalTimestamp = System.now();
+        List<ChurnSignals__b> signals = new List<ChurnSignals__b>();
+        for (ChurnPredictionResult result : results) {
+            signals.add(new ChurnSignals__b(
+                CustomerId__c = result.customerId,
+                SignalTimestamp__c = signalTimestamp,
+                RecencyRiskScore__c = result.recencyRisk,
+                FrequencyRiskScore__c = result.frequencyRisk,
+                MonetaryRiskScore__c = result.monetaryRisk,
+                EngagementRiskScore__c = result.engagementRisk,
+                SupportRiskScore__c = result.supportRisk,
+                CompositeRiskScore__c = result.compositeRisk,
+                RiskBucket__c = result.riskBucket
+            ));
+        }
+        List<BigObjectWriter.WriteResult> writeResults = BigObjectWriter.insertImmediate(signals);
+        for (Integer i = 0; i < writeResults.size(); i++) {
+            if (!writeResults[i].isSuccess) {
+                System.debug(LoggingLevel.ERROR, 'ChurnSignals__b write failed for ' +
+                    results[i].customerId + ': ' + writeResults[i].errorMessage);
+            }
+        }
     }
 
     @TestVisible
     private static void updateCustomerProfile(ChurnPredictionResult result) {
-        List<CustomerProfile__c> profiles = [
-            SELECT Id, ChurnRiskScore__c
+        updateCustomerProfiles(new List<ChurnPredictionResult>{ result });
+    }
+
+    private static void updateCustomerProfiles(List<ChurnPredictionResult> results) {
+        Map<String, Decimal> scoreByCustomerId = new Map<String, Decimal>();
+        for (ChurnPredictionResult result : results) {
+            scoreByCustomerId.put(result.customerId, result.compositeRisk);
+        }
+
+        List<CustomerProfile__c> profilesToUpdate = new List<CustomerProfile__c>();
+        for (CustomerProfile__c profile : [
+            SELECT Id, ExternalCustomerId__c, ChurnRiskScore__c
             FROM CustomerProfile__c
-            WHERE ExternalCustomerId__c = :result.customerId
-            LIMIT 1
-        ];
-        if (!profiles.isEmpty()) {
-            profiles[0].ChurnRiskScore__c = result.compositeRisk;
-            update profiles[0];
+            WHERE ExternalCustomerId__c IN :scoreByCustomerId.keySet()
+        ]) {
+            Decimal newScore = scoreByCustomerId.get(profile.ExternalCustomerId__c);
+            if (newScore != profile.ChurnRiskScore__c) {
+                profile.ChurnRiskScore__c = newScore;
+                profilesToUpdate.add(profile);
+            }
+        }
+        if (!profilesToUpdate.isEmpty()) {
+            update profilesToUpdate;
         }
     }
 
     @TestVisible
     private static void publishAlertIfNeeded(ChurnPredictionResult result) {
+        publishAlertsIfNeeded(new List<ChurnPredictionResult>{ result });
+    }
+
+    private static void publishAlertsIfNeeded(List<ChurnPredictionResult> results) {
         Decimal threshold = CortexConfigService.getChurnRiskThreshold();
-        if (result.compositeRisk < threshold) {
+        DateTime alertTimestamp = System.now();
+        List<ChurnAlertEvent__e> alerts = new List<ChurnAlertEvent__e>();
+        for (ChurnPredictionResult result : results) {
+            if (result.compositeRisk >= threshold) {
+                alerts.add(new ChurnAlertEvent__e(
+                    CustomerId__c = result.customerId,
+                    ChurnRiskScore__c = result.compositeRisk,
+                    RiskBucket__c = result.riskBucket,
+                    AlertTimestamp__c = alertTimestamp,
+                    RecommendedAction__c = result.recommendation
+                ));
+            }
+        }
+        if (alerts.isEmpty()) {
             return;
         }
-        EventBus.publish(new ChurnAlertEvent__e(
-            CustomerId__c = result.customerId,
-            ChurnRiskScore__c = result.compositeRisk,
-            RiskBucket__c = result.riskBucket,
-            AlertTimestamp__c = System.now(),
-            RecommendedAction__c = result.recommendation
-        ));
+        List<Database.SaveResult> publishResults = EventBus.publish(alerts);
+        for (Integer i = 0; i < publishResults.size(); i++) {
+            if (!publishResults[i].isSuccess()) {
+                System.debug(LoggingLevel.ERROR, 'ChurnAlertEvent__e publish failed for ' +
+                    alerts[i].CustomerId__c + ': ' + publishResults[i].getErrors());
+            }
+        }
     }
 }
